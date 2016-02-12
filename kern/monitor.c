@@ -61,7 +61,6 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
-	int x = 100;
 	// Your code here.
 	cprintf("Stack backtrace:\n");
 	uint64_t stack_base_p = read_rbp();
@@ -85,7 +84,12 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 			uint64_t arg_addr = stack_base_p;
 			for (arg_num = 0; arg_num < rip_debug_info.rip_fn_narg; arg_num++) {
 				arg_addr -= rip_debug_info.size_fn_arg[arg_num];
-				cprintf(" %016x", *(uint32_t *)arg_addr);
+				if (rip_debug_info.size_fn_arg[arg_num] == sizeof(uint32_t)) {
+					cprintf(" %016x", *(uint32_t *)arg_addr);
+				} else {
+					arg_addr = arg_addr - arg_addr % 8;
+					cprintf(" %016x", *(uint64_t *)arg_addr);
+				}
 			}
 			cprintf("\n");
 		}
