@@ -216,8 +216,15 @@ boot_alloc(uint32_t n)
 	// to a multiple of PGSIZE.
 	//
 	// LAB 2: Your code here.
-
-	return NULL;
+	//panic("x64_vm_init: this function is not finished\n");
+	result = nextfree;
+	nextfree -= n;
+	// Make sure nextfree is kept aligned.
+	ROUNDUP(nextfree, PGSIZE);
+	if ((uint64_t)nextfree <= KERNBASE) {
+		panic("boot_alloc: we're out of memory\n");
+	}
+	return result;
 }
 
 // Set up a four-level page table:
@@ -241,7 +248,7 @@ x64_vm_init(void)
 	//panic("i386_vm_init: This function is not finished\n");
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
-	panic("x64_vm_init: this function is not finished\n");
+	//panic("x64_vm_init: this function is not finished\n");
 	pml4e = boot_alloc(PGSIZE);
 	memset(pml4e, 0, PGSIZE);
 	boot_pml4e = pml4e;
@@ -253,7 +260,9 @@ x64_vm_init(void)
 	// each physical page, there is a corresponding struct PageInfo in this
 	// array.  'npages' is the number of physical pages in memory.
 	// Your code goes here:
-
+	struct PageInfo page_info[npages];
+	pages = page_info;
+	
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -291,6 +300,16 @@ x64_vm_init(void)
 	//      the PA range [0, npages*PGSIZE)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here: 
+	uint64_t offset;
+	uint64_t virtual_addr;
+	//kernal_base_addr;
+	
+	for (offset = 0; offset < npages*PGSIZE; offset++) {
+		KERNBASE + offset
+		kernal_base_addr
+		
+	}
+
 	// Check that the initial page directory has been set up correctly.
 	check_boot_pml4e(boot_pml4e);
 
@@ -344,15 +363,23 @@ page_init(void)
 	// NB: Remember to mark the memory used for initial boot page table i.e (va>=BOOT_PAGE_TABLE_START && va < BOOT_PAGE_TABLE_END) as in-use (not free)
 	size_t i;
 	struct PageInfo* last = NULL;
-	for (i = 0; i < npages; i++) {
+	if (npages > 0) {
+		pages[0].pp_ref = 0;
+		pages[0].pp_link = NULL;
+	}
+	last = &pages[0];
+	size_t hole_start_page = IOPHYSMEM / PGSIZE;
+	size_t hole_end_page = EXTPHYSMEM / PGSIZE;
+	for (i = 1; i < npages; i++) {
+		if (i >= hole_start_page && i <= hole_end_page) {
+			continue;
+		}
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = NULL;
-		if(last)
-			last->pp_link = &pages[i];
-		else
-			page_free_list = &pages[i];
+		last->pp_link = &pages[i];
 		last = &pages[i];
 	}
+	page_free_list = &pages[1];
 }
 
 //
