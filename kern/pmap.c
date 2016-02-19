@@ -419,6 +419,7 @@ page_alloc(int alloc_flags)
 	if (alloc_flags & ALLOC_ZERO){
 		memset(page2kva(page_free), 0, PGSIZE);
 	}
+	page_initpp(page_free);
 	assert(page_free->pp_ref == 0);
 	return page_free;
 }
@@ -495,7 +496,27 @@ page_decref(struct PageInfo* pp)
 pte_t *
 pml4e_walk(pml4e_t *pml4e, const void *va, int create)
 {
-	return NULL;
+	pdpe_t *pdpe = &pml4e[PML4(va)];
+	struct PageInfo *pdpe_page = NULL;
+	if (!(*pdpe & PTE_P)) {
+		if (create == false) {
+			return NULL;
+		}
+		pdpe_page = (struct PageInfo*)page_alloc(ALLOC_ZERO);
+		if (pdpe_page == NULL) {
+			return NULL;
+		}
+		pdpe_page->pp_ref++;
+		*pdpe = page2pa(pdpe_page) | PTE_P | PTE_W | PTE_U;
+	}
+
+	pte_t *pte = pdpe_walk(pdpe);
+	if (pte == NULL && pdpe_page != NULL) {
+		pdpe_page->pp_ref = 0;
+		page_free(pdpe_page);
+		*pdpe = 0;
+	}
+	return pte;
 }
 
 
@@ -505,8 +526,27 @@ pml4e_walk(pml4e_t *pml4e, const void *va, int create)
 // Hints are the same as in pml4e_walk
 pte_t *
 pdpe_walk(pdpe_t *pdpe,const void *va,int create){
-
-	return NULL;
+	pde_t *pde = &pdpe[PDPE(va)];
+	struct Pageinfo *pde_page = NULL;
+	if (!(*pde & PTE_P)) {
+		if(create == false) {
+			return NULL;
+		}
+		pde_page = (struct PageInfo*)page_alloc(ALLOC_ZERO);
+		if (pde_page == NULL) {
+			return NULL;
+		}
+		pde_page->pp_ref++;
+		*pde = page2pa(pde_page) | PTE_P | PTE_W | PTE_U;
+	}
+	
+	pte_t *pte = pgdir_walk(pde);
+	if (pte == NULL && pde_page != NULL) {
+		pde_page->pp_ref = 0;
+		page_free(pde_page);
+		*pde = 0;
+	}
+	return pte;
 }
 // Given 'pgdir', a pointer to a page directory, pgdir_walk returns
 // a pointer to the page table entry (PTE). 
@@ -517,7 +557,22 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+	pde_t *pde = &pgdir[PDX(va)];
+	struct Pageinfo *pte_page = NULL;
+	if (!(*pte & PTE_P)) {
+		if(create == false) {
+			return NULL;
+		}
+		pte_page = (struct PageInfo*)page_alloc(ALLOC_ZERO);
+		if (pte_page == NULL) {
+			return NULL;
+		}
+		pte_page->pp_ref++;
+		*pte = page2pa(pte_page) | PTE_P | PTE_W | PTE_U;
+	}
+	KADDR(PTE_ADDR(*pde));
+	PTX
+	return pte;
 }
 
 //
@@ -534,6 +589,9 @@ static void
 boot_map_region(pml4e_t *pml4e, uintptr_t la, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+	pte_t *pte = pml4e_walk(pml4e, la, true);
+	*pte = pa;
+	*pte = *pte | perm | PTE_P;
 }
 
 //
@@ -565,6 +623,28 @@ int
 page_insert(pml4e_t *pml4e, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
+	pte_t *pte = pml4e_walk(pml4e, va, false);
+	if (pte != NULL) {
+		physaddr_t pp_pa = page2pa(pp);
+		if (pp_pa == *pte) {
+			return 0;
+		}
+		// If there is already a page mapped at 'va', 
+		// it should be page_remove()d.
+		// The TLB must be invalidated if a page was formerly present at 'va'.
+		page_remove(pml4e, va);
+	}
+	// If necessary, on demand, a page table should be allocated and inserted 
+	// into 'pml4e through pdpe through pgdir'.  
+	pte = pml4e_walk(pml4e, va, true);
+	if (pte == NULL) {
+		return -E_NO_MEM;
+	}
+	// The permissions (the low 12 bits) of the page table entry 
+	// should be set to 'perm|PTE_P'. 
+	*pte = *pte | perm | PTE_P;
+	// pp->pp_ref should be incremented if the insertion succeeds. 
+	pp->pp_ref++;
 	return 0;
 }
 
@@ -583,7 +663,18 @@ struct PageInfo *
 page_lookup(pml4e_t *pml4e, void *va, pte_t **pte_store)
 {
 	// Fill this function in
-	return NULL;
+	pte_t *pte = pml4e_walk(pml4e, va, false);
+	if (pte == NULL) {
+		// Return NULL if there is no page mapped at va. 
+		return NULL;
+	}
+	struct PageInfo *page_info = pa2page(*pte);
+	if (pte_store != 0) {
+		// If pte_store is not zero, then we store in it the address                                                                 // of the pte for this page.
+		*pte_store = pte;
+	}
+	// Return the page mapped at virtual address 'va'.
+	return page_info;
 }
 
 //
@@ -605,6 +696,23 @@ void
 page_remove(pml4e_t *pml4e, void *va)
 {
 	// Fill this function in
+	struct PageInfo *page_info = page_lookup(pml4e, va, 0);
+	// If there is no physical page at that address, silently does nothing.
+	if(page_info == NULL) {
+		return;
+	}
+	// The ref count on the physical page should decrement.
+	// The physical page should be freed if the refcount reaches 0.
+	page_decref(page_info);
+	
+	// The pg table entry corresponding to 'va' should be set to 0.
+	// (if such a PTE exists)
+	pte_t *pte = pml4e_walk(pml4e, va, false);
+	if (pte != NULL) {
+		memset(*pte, 0, sizeof(*pte));
+	}
+	// The TLB must be invalidated if you remove an entry from the page table. 
+	tlb_invalidate(pml4e, va);
 }
 
 //
