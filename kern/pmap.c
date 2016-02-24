@@ -267,6 +267,8 @@ x64_vm_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
+	envs = (struct Env *)boot_alloc(sizeof(struct Env) * NENV);
+	
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -283,8 +285,12 @@ x64_vm_init(void)
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
-<<<<<<< HEAD
-
+	int i;
+	int pages_size = ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE);
+	for (i = 0; i < pages_size; i+=PGSIZE) {
+		page_insert(pml4e, pa2page(PADDR(pages) + i), (void *)(UPAGES + i), PTE_U | PTE_P);
+	}
+	
 	//////////////////////////////////////////////////////////////////////
 	// Map the 'envs' array read-only by the user at linear address UENVS
 	// (ie. perm = PTE_U | PTE_P).
@@ -292,15 +298,9 @@ x64_vm_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+	boot_map_region(pml4e, UENVS, ROUNDUP(sizeof(struct Env) * NENV, PGSIZE),
+			PADDR(envs), PTE_U | PTE_P);
 
-=======
-	int i;
-	int pages_size = ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE);
-	for (i = 0; i < pages_size; i+=PGSIZE) {
-		page_insert(pml4e, pa2page(PADDR(pages) + i), (void *)(UPAGES + i), PTE_U | PTE_P);
-	}
-	
->>>>>>> lab2
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
 	// stack.  The kernel stack grows down from virtual address KSTACKTOP.
