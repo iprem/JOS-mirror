@@ -66,6 +66,71 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	// Importing functions from trapentry.S
+	extern void XTRPX_divzero();
+	extern void XTRPX_debug();
+	extern void XTRPX_nmi();
+	extern void XTRPX_brkpt();
+	extern void XTRPX_oflow();
+	extern void XTRPX_bound();
+	extern void XTRPX_illop();
+	extern void XTRPX_device();
+	extern void XTRPX_dblflt();
+
+	/* Trap numbers 10 - 15 */
+	extern void XTRPX_tss();
+	extern void XTRPX_segnp();
+	extern void XTRPX_stack();
+	extern void XTRPX_gpflt();
+	extern void XTRPX_pgflt();
+	
+	/* Trap numbers 16 - 19 */
+	extern void XTRPX_fperr();
+	extern void XTRPX_align();
+	extern void XTRPX_mchk();
+	extern void XTRPX_simderr();
+
+	extern void XTRPX_default();
+	
+	extern void XTRPX_syscall();
+	
+	int i;
+	// Initialize all entries in idt to point to XTRPX_default first.
+	for (i = 0; i < 32; i++) {
+		SETGATE(idt[i], 1, GD_KT, XTRPX_default, 0);
+	}
+	for (i = 32; i < 256; i++) {
+		SETGATE(idt[i], 0, GD_KT, XTRPX_default, 0);
+	}
+	// Fix some entries to point to its corresponding entry point.
+	// Trap 0 - 9, 9 is reserved,
+	SETGATE(idt[T_DIVIDE], 1, GD_KT, XTRPX_divzero, 0);
+	SETGATE(idt[T_DEBUG], 1, GD_KT, XTRPX_debug, 0);
+	SETGATE(idt[T_NMI], 1, GD_KT, XTRPX_nmi, 0);
+	SETGATE(idt[T_BRKPT], 1, GD_KT, XTRPX_brkpt, 0);
+	SETGATE(idt[T_OFLOW], 1, GD_KT, XTRPX_oflow, 0);
+	SETGATE(idt[T_BOUND], 1, GD_KT, XTRPX_bound, 0);
+	SETGATE(idt[T_ILLOP], 1, GD_KT, XTRPX_illop, 0);
+	SETGATE(idt[T_DEVICE], 1, GD_KT, XTRPX_device, 0);
+	SETGATE(idt[T_DBLFLT], 1, GD_KT, XTRPX_dblflt, 0);
+	
+	// Trap numbers 10 - 15, 15 is reserved, so it is not listed below
+	SETGATE(idt[T_TSS], 1, GD_KT, XTRPX_tss, 0);
+	SETGATE(idt[T_SEGNP], 1, GD_KT, XTRPX_segnp, 0);
+	SETGATE(idt[T_STACK], 1, GD_KT, XTRPX_stack, 0);
+	SETGATE(idt[T_GPFLT], 1, GD_KT, XTRPX_gpflt, 0);
+	SETGATE(idt[T_PGFLT], 1, GD_KT, XTRPX_pgflt, 0);
+	
+        // Trap numbers 16 - 19
+	SETGATE(idt[T_FPERR], 1, GD_KT, XTRPX_fperr, 0);
+	SETGATE(idt[T_ALIGN], 1, GD_KT, XTRPX_align, 0);
+	SETGATE(idt[T_MCHK], 1, GD_KT, XTRPX_mchk, 0);
+	SETGATE(idt[T_SIMDERR], 1, GD_KT, XTRPX_simderr, 0);
+
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, XTRPX_syscall, 3);
+
+	SETGATE(idt[T_DEFAULT], 0, GD_KT, XTRPX_default, 3);
+
     idt_pd.pd_lim = sizeof(idt)-1;
     idt_pd.pd_base = (uint64_t)idt;
 	// Per-CPU setup
