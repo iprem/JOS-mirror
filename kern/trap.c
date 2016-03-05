@@ -107,7 +107,7 @@ trap_init(void)
 	SETGATE(idt[T_DIVIDE], 1, GD_KT, XTRPX_divzero, 0);
 	SETGATE(idt[T_DEBUG], 1, GD_KT, XTRPX_debug, 0);
 	SETGATE(idt[T_NMI], 1, GD_KT, XTRPX_nmi, 0);
-	SETGATE(idt[T_BRKPT], 1, GD_KT, XTRPX_brkpt, 0);
+	SETGATE(idt[T_BRKPT], 1, GD_KT, XTRPX_brkpt, 3);
 	SETGATE(idt[T_OFLOW], 1, GD_KT, XTRPX_oflow, 0);
 	SETGATE(idt[T_BOUND], 1, GD_KT, XTRPX_bound, 0);
 	SETGATE(idt[T_ILLOP], 1, GD_KT, XTRPX_illop, 0);
@@ -213,7 +213,22 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
-
+	int ret_val;
+	switch (tf->tf_trapno) {
+	case T_PGFLT:
+		return page_fault_handler(tf);
+	case T_BRKPT:
+		return monitor(tf);
+	case T_SYSCALL:
+		ret_val = syscall(tf->tf_regs.reg_rax,
+				  tf->tf_regs.reg_rdx,
+				  tf->tf_regs.reg_rcx,
+				  tf->tf_regs.reg_rbx,
+				  tf->tf_regs.reg_rdi,
+				  tf->tf_regs.reg_rsi);
+		tf->tf_regs.reg_rax = ret_val;
+		return;
+	}
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
 	if (tf->tf_cs == GD_KT)
@@ -275,6 +290,9 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	if ((tf->tf_cs & 3) == 0) {
+		panic("page fault happens in kernel mode");
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.

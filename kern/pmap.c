@@ -781,6 +781,34 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	uint64_t va_addr = (uint64_t)va;
+	uint64_t va_start = ROUNDDOWN(va_addr, PGSIZE);
+	uint64_t va_end = ROUNDUP(va_addr+len, PGSIZE);
+	pte_t *pte;
+	int access_perm = PTE_P | perm;
+	user_mem_check_addr = va_addr;
+	while (va_start < va_end) {
+		//A user program can access a virtual address if 
+		// (1) the address is below ULIM, 
+		// (2) the page table gives it permission.
+		if (va_start >= ULIM) {
+			return -E_FAULT;
+		}
+
+		if ((env->env_pml4e[PML4(va_start)] & perm) != perm) {
+			return -E_FAULT;
+		}
+
+		pte = pml4e_walk(env->env_pml4e, (void *)va_start, 0);
+		if (pte == NULL) {
+			return -E_FAULT;
+		}
+		if ((*pte & access_perm) != access_perm) {
+			return -E_FAULT;
+		}
+		va_start+=PGSIZE;
+		user_mem_check_addr = va_start;
+	}
 	return 0;
 
 }
